@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>澳門勞動法 Agent</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <i data-lucide="scale"></i>
+          </span>
+          <div>
+            <h1>澳門勞動法 Agent</h1>
+            <p>MO · 勞動法資訊與初步風險評估</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <span id="sourceBadge" class="status-pill neutral">載入來源中</span>
+          <button
+            id="modelButton"
+            class="model-button"
+            type="button"
+            data-tooltip="設定 AI 模型"
+          >
+            <i data-lucide="brain-circuit"></i>
+            <span id="modelButtonLabel">規則模式</span>
+          </button>
+          <button
+            id="historyButton"
+            class="icon-button history-button"
+            type="button"
+            data-tooltip="歷史紀錄"
+            aria-label="歷史紀錄"
+          >
+            <i data-lucide="history"></i>
+            <span id="historyCount" class="history-count hidden">0</span>
+          </button>
+          <button
+            id="resolveButton"
+            class="resolve-button"
+            type="button"
+            data-tooltip="清除目前上下文"
+          >
+            <i data-lucide="circle-check-big"></i>
+            <span>問題已解決</span>
+          </button>
+          <button
+            id="resetButton"
+            class="icon-button"
+            type="button"
+            data-tooltip="建立新案件"
+            aria-label="建立新案件"
+          >
+            <i data-lucide="square-plus"></i>
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="conversation-pane" aria-label="Agent 對話">
+          <div id="conversation" class="conversation">
+            <div class="empty-state">
+              <div class="empty-icon" aria-hidden="true">
+                <i data-lucide="message-square-text"></i>
+              </div>
+              <h2>描述你的澳門勞動法問題</h2>
+              <div class="quick-actions" aria-label="快速問題">
+                <button type="button" data-query="工資最遲應在何時支付？">
+                  <i data-lucide="banknote"></i>
+                  工資支付期限
+                </button>
+                <button type="button" data-query="正常工作時間每日不得超過多少小時？">
+                  <i data-lucide="clock-3"></i>
+                  正常工作時間
+                </button>
+                <button type="button" data-query="每週休息日有什麼規定？">
+                  <i data-lucide="calendar-check-2"></i>
+                  每週休息日
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <form id="queryForm" class="composer">
+            <label class="sr-only" for="queryInput">問題內容</label>
+            <textarea
+              id="queryInput"
+              rows="2"
+              maxlength="4000"
+              placeholder="描述發生的事情、日期及目前情況"
+              required
+            ></textarea>
+            <div class="composer-actions">
+              <span id="composerNote" class="composer-note"></span>
+              <button
+                id="submitButton"
+                class="primary-button"
+                type="submit"
+                data-tooltip="送出問題"
+              >
+                <i data-lucide="send-horizontal"></i>
+                <span>送出</span>
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <aside class="case-pane" aria-label="案件資料">
+          <section class="panel-section">
+            <div class="section-heading">
+              <div>
+                <span class="section-kicker">CASE</span>
+                <h2>案件資料</h2>
+              </div>
+              <i data-lucide="user-round-cog"></i>
+            </div>
+
+            <div class="field-grid">
+              <label class="field">
+                <span>角色</span>
+                <select id="roleInput">
+                  <option value="employee">僱員</option>
+                  <option value="employer">僱主</option>
+                  <option value="representative">代理人</option>
+                  <option value="other">其他</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>事件日期</span>
+                <input id="eventDateInput" type="date" />
+              </label>
+              <label class="field field-wide">
+                <span>工作地點</span>
+                <input id="workLocationInput" type="text" value="澳門" />
+              </label>
+            </div>
+          </section>
+
+          <section class="panel-section facts-section">
+            <div class="section-heading compact">
+              <div>
+                <span class="section-kicker">FACTS</span>
+                <h2>補充事實</h2>
+              </div>
+              <button
+                id="addFactButton"
+                class="icon-button quiet"
+                type="button"
+                data-tooltip="新增事實欄位"
+                aria-label="新增事實欄位"
+              >
+                <i data-lucide="plus"></i>
+              </button>
+            </div>
+            <div id="customFacts" class="custom-facts"></div>
+          </section>
+
+          <section class="panel-section source-section">
+            <div class="section-heading compact">
+              <div>
+                <span class="section-kicker">SOURCES</span>
+                <h2>來源狀態</h2>
+              </div>
+              <i data-lucide="library-big"></i>
+            </div>
+            <dl class="source-stats">
+              <div>
+                <dt>法域</dt>
+                <dd id="metaJurisdiction">MO</dd>
+              </div>
+              <div>
+                <dt>已核准來源</dt>
+                <dd id="metaSources">0</dd>
+              </div>
+              <div>
+                <dt>條文單位</dt>
+                <dd id="metaProvisions">0</dd>
+              </div>
+            </dl>
+            <div id="testWarning" class="source-warning hidden">
+              <i data-lucide="flask-conical"></i>
+              <p>本機測試來源，未經澳門法律專業人士覆核。</p>
+            </div>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <dialog id="modelDialog" class="model-dialog">
+      <form id="modelForm" class="model-form">
+        <header class="dialog-header">
+          <div>
+            <span class="section-kicker">MODEL</span>
+            <h2>AI 模型設定</h2>
+          </div>
+          <button
+            id="closeModelDialog"
+            class="icon-button quiet"
+            type="button"
+            data-tooltip="關閉設定"
+            aria-label="關閉設定"
+          >
+            <i data-lucide="x"></i>
+          </button>
+        </header>
+
+        <div class="model-fields">
+          <label class="field">
+            <span>Base URL</span>
+            <input
+              id="llmBaseUrlInput"
+              type="url"
+              value="https://api.openai.com/v1"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+          <label class="field">
+            <span>模型名稱</span>
+            <input
+              id="llmModelInput"
+              type="text"
+              value="gpt-5-mini"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+          <label class="field field-wide">
+            <span>API Key</span>
+            <input
+              id="llmApiKeyInput"
+              type="password"
+              autocomplete="new-password"
+              placeholder="sk-..."
+            />
+          </label>
+          <label class="field field-wide model-temperature">
+            <span>
+              Temperature
+              <output id="temperatureOutput">0.1</output>
+            </span>
+            <input
+              id="llmTemperatureInput"
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value="0.1"
+            />
+          </label>
+        </div>
+
+        <label class="check-row">
+          <input id="rememberKeyInput" type="checkbox" />
+          <span>只在這個瀏覽器分頁記住設定</span>
+        </label>
+
+        <div id="modelTestResult" class="model-test-result hidden"></div>
+
+        <footer class="dialog-actions">
+          <button id="disableModelButton" class="secondary-button" type="button">
+            停用模型
+          </button>
+          <div class="dialog-actions-right">
+            <button id="testModelButton" class="secondary-button" type="button">
+              測試連線
+            </button>
+            <button class="primary-button" type="submit">
+              <i data-lucide="save"></i>
+              <span>儲存設定</span>
+            </button>
+          </div>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="historyDialog" class="history-dialog">
+      <div class="history-shell">
+        <header class="dialog-header">
+          <div>
+            <span class="section-kicker">HISTORY</span>
+            <h2>歷史紀錄</h2>
+            <p class="history-note">只儲存在目前瀏覽器，不會上傳到伺服器。</p>
+          </div>
+          <button
+            id="closeHistoryDialog"
+            class="icon-button quiet"
+            type="button"
+            data-tooltip="關閉紀錄"
+            aria-label="關閉紀錄"
+          >
+            <i data-lucide="x"></i>
+          </button>
+        </header>
+        <div id="historyList" class="history-list"></div>
+        <footer class="dialog-actions">
+          <button id="clearHistoryButton" class="secondary-button" type="button">
+            清除全部紀錄
+          </button>
+        </footer>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/vendor/lucide.min.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

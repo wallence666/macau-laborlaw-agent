@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+APIkey.md
+
+# 個案資料與審計紀錄不得提交。
+artifacts/audit/
+artifacts/ui-qa/
