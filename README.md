@@ -1,45 +1,56 @@
-# 澳門勞動法資訊 Agent MVP
+# 澳門勞動法 Agent
 
-這是一個依照 `勞動法Agent_MVP企劃書.md` 實作的最小可執行垂直切片。第一版先把資料契約、檢索、引用驗證、風險升級與 CLI 串起來，不急著拆成多個服務。
+澳門特別行政區勞動法資訊、法源檢索、引用驗證及初步風險評估 Agent。
 
 ![澳門勞動法 Agent 介面](docs/images/demo.png)
 
-## 目前安全邊界
+## 功能
 
-- 法域固定為澳門特別行政區。
-- 只使用 `data/source-registry/registry.json` 中 `review_status=approved` 且符合生效日期的來源。
-- 沒有已審核來源時，系統會回傳 `insufficient_sources`，不會自行生成法條、條號或法律結論。
-- 每個法律主張都必須對應到系統實際取得的證據，並通過逐字引用驗證。
-- 高風險、證據不足、版本衝突、引用失敗或角色衝突會要求真人處理。
-- 預設審計紀錄只保存來源 ID、狀態與風險代碼，不保存原始問題、個人資料或案件事實。
-- 輸出不是正式法律意見。
+- 可視化 Web 介面與命令列介面。
+- 判斷使用者角色、議題及缺少的關鍵事實。
+- 從已核准的澳門法源 registry 檢索條文。
+- 支援事件日期及法規版本過濾。
+- 每個法律主張都必須關聯證據並通過逐字引用驗證。
+- 支援 OpenAI-compatible 模型，用於事實抽取、檢索規劃及受證據約束的分析。
+- 支援「按現有資料分析」，缺少事實時仍可產生有限分析。
+- 支援「問題已解決」，清除目前案件的對話與事實上下文。
+- 瀏覽器本機歷史紀錄，可查看、重用及刪除之前的問題。
+- 法源卡片可跳至官方 PDF 的對應頁碼。
+- 高風險、引用失敗、版本衝突或角色衝突會升級真人處理。
 
-目前已從澳門特別行政區公報與法務局 LegisMac 匯入 4 個官方來源、106 個 provision。依照專案擁有者要求，來源現時標記為 `review_status=approved`、`review_scope=test_only`，方便在本機測試 Agent。
+## Agent 工作流
 
-這批來源沒有經澳門法律專業人士覆核，只可用於個人開發與測試，不可用於實際個案。Agent 每次使用這些來源時都會在 `risks` 加入測試用途警告。
+```text
+A0 協調
+  -> A1 受理與事實
+  -> A2 檢索規劃
+  -> A3 法源檢索
+  -> A4 法律分析
+  -> A5 引用驗證
+  -> A6 風險與升級
+  -> A7 回答組裝
+  -> A8 審計與評估
+```
 
-目前匯入範圍：
+模型只負責 A1、A2 與 A4。A3 檢索、A5 引用驗證及 A6 風險升級由確定性程式控制。
 
-- 第 7/2008 號法律《勞動關係法》，第 134/2020 號行政長官批示重新公佈的合併版。
-- 第 23/2024 號法律修改的第七十條，自 2024-12-27 生效。
-- 第 9/2026 號法律即日生效的第五十四條及第五十六條，自 2026-07-28 生效。
-- 第 9/2026 號法律延後生效的第四十六條、第七十五條及第八十五條，自 2027-01-01 生效。
+## 系統需求
 
-來源 PDF 位於 `data/snapshots/mo/`，逐字引用與 checksum 見 `docs/official-source-import.md`。
+- Python 3.11 或以上。
+- 執行 Web UI 與 Agent 不需要額外 Python 套件。
+- 重建官方 PDF registry 時需要 `pdfplumber`。
 
-## 執行
-
-需求：Python 3.11 或以上。
-
-### 可視化介面
-
-#### 啟動
+## 啟動 Web UI
 
 ```powershell
 python run_ui.py
 ```
 
-開啟 `http://127.0.0.1:8765`。介面包含案件角色、事件日期、補充事實、動態追問、法源原文、風險提示及 `trace_id`。前端與 API 均由本機 Python 標準庫提供，不依賴外部服務。
+開啟：
+
+```text
+http://127.0.0.1:8765
+```
 
 指定其他連接埠：
 
@@ -47,15 +58,15 @@ python run_ui.py
 python run_ui.py --port 8877
 ```
 
-#### 停止
+## 停止 Web UI
 
-若服務在前景終端執行，按：
+前景執行時按：
 
 ```text
 Ctrl+C
 ```
 
-若使用另一個 PowerShell 視窗停止預設連接埠 `8765`：
+從另一個 PowerShell 視窗停止：
 
 ```powershell
 $port = 8765
@@ -70,38 +81,53 @@ Get-NetTCPConnection -LocalPort $port -State Listen |
 Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue
 ```
 
-若命令沒有輸出，代表 `8765` 已無服務。
+沒有輸出即代表服務已停止。
 
-在 Linux 或 macOS 停止服務：
+## AI 模型設定
 
-```bash
-lsof -ti tcp:8765 | xargs kill
+點擊介面右上角「規則模式」開啟模型設定，填入：
+
+- Base URL。
+- 模型名稱。
+- API Key。
+- Temperature。
+
+支援 OpenAI-compatible `/chat/completions` API。
+
+DeepSeek 範例：
+
+```text
+Base URL：https://api.deepseek.com
+模型名稱：deepseek-flash
 ```
 
-當使用者無法提供追問所需的資料時，可選擇「按現有資料分析」。系統會繼續檢索並回傳有限分析，同時保留未提供事實、加入 `partial_analysis` 風險提示；高風險、引用失敗或來源不足仍會阻止回答。
+API Key 預設只保存在目前頁面的 JavaScript 記憶體。勾選「只在這個瀏覽器分頁記住設定」後，才寫入 `sessionStorage`。
 
-右上角「問題已解決」會關閉目前案件的伺服器狀態，清空對話、事實與回答，並建立新的 `case_id`。歷史紀錄按鈕可查看之前的問題、回答狀態、摘要、條號與 `trace_id`；紀錄只保存在本機瀏覽器，最多保留 30 筆，不保存 API Key 或完整案件事實。
+API Key 不會寫入：
 
-右上角「規則模式」可開啟 AI 模型設定。介面支援 OpenAI-compatible
-`/chat/completions` 端點，可設定 Base URL、模型名稱、API Key 及
-Temperature。API Key 預設只保存在目前頁面的 JavaScript 記憶體；勾選
-「只在這個瀏覽器分頁記住設定」後才寫入 `sessionStorage`，不會寫入
-registry、SQLite 或審計檔。
+- 法源 registry。
+- 案件狀態。
+- 歷史紀錄。
+- Audit JSONL。
 
 ![AI 模型設定](docs/images/model-settings.png)
 
-模型啟用後會負責：
+## 案件與歷史紀錄
 
-- 從自然語言抽取日期、議題與檢索查詢。
-- 根據檢索到的原文產生受證據約束的分析。
+「問題已解決」會：
 
-A3 檢索、A5 引用驗證與 A6 風險升級仍是確定性程式控制。模型未能提供精確引文時，系統會阻止回答並要求真人處理。沒有 API Key 時，介面維持規則模式。
+- 通知後端解除目前 `case_id` 的角色鎖定。
+- 清空目前對話、事實、回答及模型上下文。
+- 建立新的 `case_id`，避免下一個問題混入舊案例。
 
-每個 provision 現在保存 `page_start`、`page_end` 及 PDF 端點。法源卡片上的「PDF 第 N 頁」會開啟官方 PDF 快照並跳至對應頁面，方便直接核對原文。
+歷史紀錄保存在本機瀏覽器：
 
-![PDF 頁碼引用](docs/images/pdf-link.png)
+- 最多保留 30 筆。
+- 包含問題、狀態、摘要、條號、模型名稱及 `trace_id`。
+- 不保存 API Key 或完整案件事實。
+- 可重用問題、刪除個別紀錄或清除全部紀錄。
 
-### 命令列
+## 命令列
 
 ```powershell
 python run_agent.py `
@@ -111,24 +137,62 @@ python run_agent.py `
   --fact event_date=2026-09-01
 ```
 
-輸出為結構化 JSON。上述例子目前可以取得《勞動關係法》第六十二條，回傳基本報酬應於支付義務到期日起九個工作日內支付，並附上測試用途警告。
-
-直接使用套件模組：
+缺少事實時仍按目前資料分析：
 
 ```powershell
-$env:PYTHONPATH="src"
-python -m laborlaw_agent `
-  --query "公司更改我的休息日" `
+python run_agent.py `
+  --query "口頭約定工作後僱主拒絕支付報酬" `
   --role employee `
   --fact work_location=澳門 `
-  --fact event_date=2026-09-01
+  --allow-incomplete
 ```
 
-互動追問模式會持續要求缺少的事實，直到工作流完成或需要真人處理：
+互動追問模式：
 
 ```powershell
 python run_agent.py --interactive
 ```
+
+## 法源資料
+
+目前 registry 包含 4 個來源、106 個 provision：
+
+- 第 7/2008 號法律《勞動關係法》2020 合併版。
+- 第 23/2024 號法律修改的第七十條。
+- 第 9/2026 號法律即日生效的第五十四條及第五十六條。
+- 第 9/2026 號法律延後至 2027-01-01 生效的第四十六條、第七十五條及第八十五條。
+
+目前來源使用：
+
+```text
+review_status = approved
+review_scope = test_only
+```
+
+這些來源未經澳門法律專業人士覆核，只供開發及測試，不可用於實際個案。
+
+每個 provision 保存：
+
+- 法規名稱、條號與標題。
+- 條文原文。
+- 生效日期與失效日期。
+- 官方頁面網址。
+- PDF 快照及 `page_start`、`page_end`。
+- 版本標籤與 SHA-256 校驗碼。
+
+法源卡片的「PDF 第 N 頁」會開啟官方 PDF 並跳至對應頁面。
+
+![PDF 頁碼引用](docs/images/pdf-link.png)
+
+## 私隱與安全
+
+- 法域固定為澳門特別行政區。
+- 只使用已核准且符合事件日期的法源。
+- 不生成沒有來源支持的法條、條號或法律結論。
+- 高風險、證據不足、版本衝突及引用失敗會阻止回答或升級真人。
+- 同一案件不得混合僱員與僱主角色。
+- 審計紀錄只保存來源 ID、狀態與風險代碼。
+- 系統輸出不是正式法律意見。
 
 ## 測試
 
@@ -136,7 +200,15 @@ python run_agent.py --interactive
 python -m pytest
 ```
 
-測試使用明確標示為 `[測試資料]` 且網域為 `test.invalid` 的來源，只驗證程式契約，不代表任何澳門法律內容。
+測試涵蓋：
+
+- 法源 registry 與版本日期。
+- 關鍵字檢索與 PDF 頁碼。
+- LLM 規劃與受證據約束的分析。
+- 引用驗證與錯誤引用阻止。
+- 缺少事實與有限分析。
+- 案件結案與角色鎖定。
+- Web API、PDF Range 請求及安全 headers。
 
 ## 目錄
 
@@ -144,33 +216,38 @@ python -m pytest
 src/laborlaw_agent/
 ├── models.py       # 共用狀態、證據與回答 schema
 ├── policies.py     # 議題、必要事實與高風險規則
-├── repository.py   # 官方來源 registry、版本過濾與檢索
+├── repository.py   # 法源 registry、版本過濾與檢索
+├── llm.py          # OpenAI-compatible 模型介面
 ├── agents.py       # A1-A8 邏輯角色
-├── workflow.py     # A0 協調、停止與升級
+├── workflow.py     # A0 協調、結案與升級
 ├── audit.py        # 最小化審計紀錄
 ├── cli.py          # 命令列介面
-└── web/            # 本機 Web API 與靜態前端
+└── web/            # Web API 與靜態前端
 ```
 
-## 加入已審核來源
+## 重建法源 Registry
 
-`data/source-registry/registry.json` 的 `sources` 陣列每筆資料需包含企劃書要求的來源 metadata，並以 `provisions` 保存條文層級內容。只有法律審核者確認後，才可把 `review_status` 設為 `approved`。
-
-詳細欄位與政策見 `docs/source-policy.md` 和 `docs/agent-contracts.md`。
-
-AI 模型接線說明見 `docs/llm-integration.md`。
-
-## 授權
-
-本專案使用 MIT License，詳見 `LICENSE`。系統輸出只供資訊與初步風險評估，不構成正式法律意見。
-
-## 重建官方來源索引
-
-在 Codex 主執行環境中，使用內附的 PDF 依賴執行：
+安裝 PDF 解析套件：
 
 ```powershell
-$env:PYTHONPATH="C:\Users\walle\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\Lib\site-packages"
+python -m pip install pdfplumber
+```
+
+從官方 PDF 重建：
+
+```powershell
 python scripts/build_macau_labor_registry.py --approve-for-testing
 ```
 
-未傳入 `--approve-for-testing` 時，腳本會把來源標記為 `pending`。測試核准不是法律審核，也不會產生 `review_scope=production` 的來源。
+未傳入 `--approve-for-testing` 時，來源會標記為 `pending`。
+
+## 相關文件
+
+- `docs/source-policy.md`
+- `docs/official-source-import.md`
+- `docs/agent-contracts.md`
+- `docs/llm-integration.md`
+
+## 授權
+
+本專案使用 MIT License，詳見 `LICENSE`。
